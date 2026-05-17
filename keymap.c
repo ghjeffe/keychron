@@ -28,31 +28,56 @@ enum layers{
 // Shift + Backspace = Delete
 const key_override_t delete_key_override = ko_make_basic(MOD_MASK_SHIFT, KC_BSPC, KC_DEL);
 
-// Alt + number = Alt + F-key
-const key_override_t alt_f1_override  = ko_make_basic(MOD_MASK_ALT, KC_1, KC_F1);
-const key_override_t alt_f2_override  = ko_make_basic(MOD_MASK_ALT, KC_2, KC_F2);
-const key_override_t alt_f3_override  = ko_make_basic(MOD_MASK_ALT, KC_3, KC_F3);
-const key_override_t alt_f4_override  = ko_make_basic(MOD_MASK_ALT, KC_4, KC_F4);
-const key_override_t alt_f5_override  = ko_make_basic(MOD_MASK_ALT, KC_5, KC_F5);
-const key_override_t alt_f6_override  = ko_make_basic(MOD_MASK_ALT, KC_6, KC_F6);
-const key_override_t alt_f7_override  = ko_make_basic(MOD_MASK_ALT, KC_7, KC_F7);
-const key_override_t alt_f8_override  = ko_make_basic(MOD_MASK_ALT, KC_8, KC_F8);
-const key_override_t alt_f9_override  = ko_make_basic(MOD_MASK_ALT, KC_9, KC_F9);
-const key_override_t alt_f10_override = ko_make_basic(MOD_MASK_ALT, KC_0, KC_F10);
-
 const key_override_t **key_overrides = (const key_override_t *[]){
     &delete_key_override,
-    &alt_f1_override,
-    &alt_f2_override,
-    &alt_f3_override,
-    &alt_f4_override,
-    &alt_f5_override,
-    &alt_f6_override,
-    &alt_f7_override,
-    &alt_f8_override,
-    &alt_f9_override,
-    &alt_f10_override,
     NULL
+};
+
+// Alt + number = Alt + F-key, implemented via process_record_user
+// to avoid modifier suppression issues with key overrides
+static uint16_t alt_fkey_replacement(uint16_t keycode) {
+    switch (keycode) {
+        case KC_1: return KC_F1;
+        case KC_2: return KC_F2;
+        case KC_3: return KC_F3;
+        case KC_4: return KC_F4;
+        case KC_5: return KC_F5;
+        case KC_6: return KC_F6;
+        case KC_7: return KC_F7;
+        case KC_8: return KC_F8;
+        case KC_9: return KC_F9;
+        case KC_0: return KC_F10;
+        default:   return KC_NO;
+    }
+}
+
+static uint16_t alt_fkey_registered = KC_NO;
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    switch (keycode) {
+        case KC_1 ... KC_0: {
+            uint16_t fkey = alt_fkey_replacement(keycode);
+            if (fkey == KC_NO) return true;
+
+            if (record->event.pressed) {
+                if (get_mods() & MOD_MASK_ALT) {
+                    // Alt is held: register the F-key instead, keep Alt active
+                    alt_fkey_registered = fkey;
+                    register_code(fkey);
+                    return false; // suppress the number key
+                }
+            } else {
+                // On release, if we registered an F-key, unregister it
+                if (alt_fkey_registered != KC_NO) {
+                    unregister_code(alt_fkey_registered);
+                    alt_fkey_registered = KC_NO;
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+    return true;
 };
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
